@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react'
-import { FiLoader, FiSend, FiX } from 'react-icons/fi'
+import { FiLoader, FiSend, FiX, FiMaximize2, FiMinimize2 } from 'react-icons/fi'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import { ModelSelector } from '../ModelSelector'
@@ -44,6 +44,16 @@ export const TextArea: React.FC<TextAreaProps> = ({
   const [isHovering, setIsHovering] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // スクロール検出と最大化機能用の state
+  const [isScrollable, setIsScrollable] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false)
+  const [beforeMaximizeHeight, setBeforeMaximizeHeight] = useState<number>(72)
+
+  // 定数定義
+  const TEXTAREA_MIN_HEIGHT = 72 // 3行分の最小高さ
+  const TEXTAREA_MAX_AUTO_HEIGHT = 240 // 自動調整の最大高さ（10行）
+  const MAXIMIZED_OFFSET = 200 // 最大化時のウィンドウからのオフセット
+
   // プラットフォームに応じた Modifire キーの表示を決定
   const modifierKey = useMemo(() => {
     const isMac = navigator.platform.toLowerCase().includes('mac')
@@ -55,6 +65,47 @@ export const TextArea: React.FC<TextAreaProps> = ({
     return t('textarea.placeholder', { modifier: modifierKey })
   }, [t, modifierKey])
 
+  // 最大化/最小化ハンドラー
+  const handleToggleMaximize = useCallback(() => {
+    if (!textareaRef.current) return
+
+    if (isMaximized) {
+      // 最小化（元のサイズに復元）
+      const restoredHeight = beforeMaximizeHeight
+      setTextareaHeight(restoredHeight)
+      textareaRef.current.style.height = `${restoredHeight}px`
+      textareaRef.current.style.overflowY =
+        restoredHeight > TEXTAREA_MAX_AUTO_HEIGHT ? 'auto' : 'hidden'
+      setIsMaximized(false)
+    } else {
+      // 最大化
+      // 現在の高さを保存
+      setBeforeMaximizeHeight(textareaHeight)
+
+      // ウィンドウ高さから必要なオフセットを引いた高さを計算
+      const maximizedHeight = Math.max(TEXTAREA_MIN_HEIGHT, window.innerHeight - MAXIMIZED_OFFSET)
+
+      setTextareaHeight(maximizedHeight)
+      textareaRef.current.style.height = `${maximizedHeight}px`
+      textareaRef.current.style.overflowY = 'auto'
+      setIsManuallyResized(true)
+      setIsMaximized(true)
+
+      // 親コンポーネントに高さ変更を通知
+      if (onHeightChange) {
+        onHeightChange(maximizedHeight)
+      }
+    }
+  }, [
+    isMaximized,
+    textareaHeight,
+    beforeMaximizeHeight,
+    onHeightChange,
+    TEXTAREA_MIN_HEIGHT,
+    TEXTAREA_MAX_AUTO_HEIGHT,
+    MAXIMIZED_OFFSET
+  ])
+
   // グローバルなキーボードショートカットのイベントリスナーを設定
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -63,13 +114,20 @@ export const TextArea: React.FC<TextAreaProps> = ({
         e.preventDefault()
         setPlanMode(!planMode)
       }
+
+      // Cmd+Shift+M (または Ctrl+Shift+M) でテキストエリア最大化/最小化
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        // スクロールの有無に関わらず実行可能
+        handleToggleMaximize()
+      }
     }
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown)
     }
-  }, [planMode, setPlanMode, t])
+  }, [planMode, setPlanMode, isScrollable, isMaximized, handleToggleMaximize])
 
   // テキストエリアの高さを自動調整する（10行まで）
   useEffect(() => {
@@ -140,7 +198,27 @@ export const TextArea: React.FC<TextAreaProps> = ({
     }
   }, [value])
 
-  // No scroll position monitoring needed as we're keeping the border visible at all times
+  // スクロール可能状態の検出（ResizeObserverで効率的に監視）
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea || isMaximized) return
+
+    const checkScrollable = () => {
+      const hasScroll = textarea.scrollHeight > textarea.clientHeight
+      setIsScrollable(hasScroll)
+    }
+
+    // 初回チェック
+    checkScrollable()
+
+    // ResizeObserverで継続的に監視
+    const resizeObserver = new ResizeObserver(checkScrollable)
+    resizeObserver.observe(textarea)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [textareaHeight, value, isMaximized])
 
   const validateAndProcessImage = useCallback(
     (file: File) => {
@@ -320,6 +398,47 @@ export const TextArea: React.FC<TextAreaProps> = ({
     setAttachedImages((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // 最大化中のウィンドウリサイズハンドリング
+  useEffect(() => {
+    if (!isMaximized) return
+
+    const handleWindowResize = () => {
+      if (textareaRef.current) {
+        const newMaximizedHeight = Math.max(
+          TEXTAREA_MIN_HEIGHT,
+          window.innerHeight - MAXIMIZED_OFFSET
+        )
+        setTextareaHeight(newMaximizedHeight)
+        textareaRef.current.style.height = `${newMaximizedHeight}px`
+
+        if (onHeightChange) {
+          onHeightChange(newMaximizedHeight)
+        }
+      }
+    }
+
+    window.addEventListener('resize', handleWindowResize)
+    return () => {
+      window.removeEventListener('resize', handleWindowResize)
+    }
+  }, [isMaximized, onHeightChange, TEXTAREA_MIN_HEIGHT, MAXIMIZED_OFFSET])
+
+  // Escキーで最大化解除
+  useEffect(() => {
+    if (!isMaximized) return
+
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleToggleMaximize()
+      }
+    }
+
+    window.addEventListener('keydown', handleEscKey)
+    return () => {
+      window.removeEventListener('keydown', handleEscKey)
+    }
+  }, [isMaximized, handleToggleMaximize])
+
   return (
     <div className="relative w-full">
       {attachedImages.length > 0 && (
@@ -400,6 +519,31 @@ export const TextArea: React.FC<TextAreaProps> = ({
               document.addEventListener('mouseup', handleMouseUp)
             }}
           />
+
+          {/* 最大化ボタン */}
+          {isScrollable && !disabled && (
+            <button
+              onClick={handleToggleMaximize}
+              className="absolute top-3 right-3 p-1.5 rounded-md 
+                       bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm
+                       hover:bg-gray-100 dark:hover:bg-gray-700 
+                       transition-all duration-200 z-20
+                       border border-gray-200 dark:border-gray-600
+                       shadow-sm hover:shadow-md"
+              aria-label={isMaximized ? 'Restore size (Esc)' : 'Maximize'}
+              title={
+                isMaximized
+                  ? `Restore size (Esc or ${modifierKey}+Shift+M)`
+                  : `Maximize (${modifierKey}+Shift+M)`
+              }
+            >
+              {isMaximized ? (
+                <FiMinimize2 className="text-base text-gray-700 dark:text-gray-300" />
+              ) : (
+                <FiMaximize2 className="text-base text-gray-700 dark:text-gray-300" />
+              )}
+            </button>
+          )}
 
           {/* Textarea without border */}
           <textarea
