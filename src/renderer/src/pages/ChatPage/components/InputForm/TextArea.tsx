@@ -470,80 +470,82 @@ export const TextArea: React.FC<TextAreaProps> = ({
         onDragEnter={handleDrag}
       >
         <div className="relative textarea-container">
-          {/* Resize bar at the top */}
-          <div
-            className={`resize-bar h-2 w-full cursor-ns-resize rounded-t-lg transition-opacity duration-200 ${
-              isHovering
-                ? 'opacity-100 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'
-                : 'opacity-0'
-            }`}
-            onMouseEnter={() => setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
-            onMouseDown={(e) => {
-              e.preventDefault()
+          {/* Resize bar and maximize button container */}
+          <div className="flex items-center">
+            {/* Resize bar at the top */}
+            <div
+              className={`flex-1 resize-bar h-2 cursor-ns-resize rounded-tl-lg transition-opacity duration-200 ${
+                isHovering
+                  ? 'opacity-100 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'
+                  : 'opacity-0'
+              }`}
+              onMouseEnter={() => setIsHovering(true)}
+              onMouseLeave={() => setIsHovering(false)}
+              onMouseDown={(e) => {
+                e.preventDefault()
 
-              // Record initial position
-              const startY = e.clientY
-              // Get the actual height of the textarea from the DOM element (not from state)
-              const startHeight = textareaRef.current
-                ? textareaRef.current.clientHeight
-                : textareaHeight
+                // Record initial position
+                const startY = e.clientY
+                // Get the actual height of the textarea from the DOM element (not from state)
+                const startHeight = textareaRef.current
+                  ? textareaRef.current.clientHeight
+                  : textareaHeight
 
-              // Track mouse movement
-              const handleMouseMove = (moveEvent: MouseEvent) => {
-                // Calculate movement distance (moving up increases height, moving down decreases height)
-                const deltaY = startY - moveEvent.clientY
-                // Change directly from current height (with min and max constraints)
-                const newHeight = Math.max(72, Math.min(500, startHeight + deltaY))
+                // Track mouse movement
+                const handleMouseMove = (moveEvent: MouseEvent) => {
+                  // Calculate movement distance (moving up increases height, moving down decreases height)
+                  const deltaY = startY - moveEvent.clientY
+                  // Change directly from current height (with min and max constraints)
+                  const newHeight = Math.max(72, Math.min(500, startHeight + deltaY))
 
-                if (textareaRef.current) {
-                  setTextareaHeight(newHeight)
-                  textareaRef.current.style.height = `${newHeight}px`
-                  setIsManuallyResized(true)
+                  if (textareaRef.current) {
+                    setTextareaHeight(newHeight)
+                    textareaRef.current.style.height = `${newHeight}px`
+                    setIsManuallyResized(true)
 
-                  // Notify parent of height change
-                  if (onHeightChange) {
-                    onHeightChange(newHeight)
+                    // Notify parent of height change
+                    if (onHeightChange) {
+                      onHeightChange(newHeight)
+                    }
                   }
                 }
-              }
 
-              // Handler for when the mouse button is released
-              const handleMouseUp = () => {
-                document.removeEventListener('mousemove', handleMouseMove)
-                document.removeEventListener('mouseup', handleMouseUp)
-              }
+                // Handler for when the mouse button is released
+                const handleMouseUp = () => {
+                  document.removeEventListener('mousemove', handleMouseMove)
+                  document.removeEventListener('mouseup', handleMouseUp)
+                }
 
-              // Add event listeners
-              document.addEventListener('mousemove', handleMouseMove)
-              document.addEventListener('mouseup', handleMouseUp)
-            }}
-          />
+                // Add event listeners
+                document.addEventListener('mousemove', handleMouseMove)
+                document.addEventListener('mouseup', handleMouseUp)
+              }}
+            />
 
-          {/* 最大化ボタン */}
-          {isScrollable && !disabled && (
-            <button
-              onClick={handleToggleMaximize}
-              className="absolute top-3 right-3 p-1.5 rounded-md 
-                       bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm
-                       hover:bg-gray-100 dark:hover:bg-gray-700 
-                       transition-all duration-200 z-20
-                       border border-gray-200 dark:border-gray-600
-                       shadow-sm hover:shadow-md"
-              aria-label={isMaximized ? 'Restore size (Esc)' : 'Maximize'}
-              title={
-                isMaximized
-                  ? `Restore size (Esc or ${modifierKey}+Shift+M)`
-                  : `Maximize (${modifierKey}+Shift+M)`
-              }
-            >
-              {isMaximized ? (
-                <FiMinimize2 className="text-base text-gray-700 dark:text-gray-300" />
-              ) : (
-                <FiMaximize2 className="text-base text-gray-700 dark:text-gray-300" />
-              )}
-            </button>
-          )}
+            {/* 最大化ボタン - リサイズバーの隣 */}
+            {isScrollable && !disabled && (
+              <button
+                onClick={handleToggleMaximize}
+                className="p-1.5 rounded-tr-lg 
+                         bg-white dark:bg-gray-800 
+                         border-l border-gray-300 dark:border-gray-600
+                         hover:bg-gray-50 dark:hover:bg-gray-700 
+                         transition-all duration-200"
+                aria-label={isMaximized ? 'Restore size (Esc)' : 'Maximize'}
+                title={
+                  isMaximized
+                    ? `Restore size (Esc or ${modifierKey}+Shift+M)`
+                    : `Maximize (${modifierKey}+Shift+M)`
+                }
+              >
+                {isMaximized ? (
+                  <FiMinimize2 className="text-base text-gray-700 dark:text-gray-300" />
+                ) : (
+                  <FiMaximize2 className="text-base text-gray-700 dark:text-gray-300" />
+                )}
+              </button>
+            )}
+          </div>
 
           {/* Textarea without border */}
           <textarea
